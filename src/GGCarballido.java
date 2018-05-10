@@ -2,6 +2,7 @@ import java.awt.*;
 import javax.swing.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.Random;
 
 /* Adam Carballido
  *  A Java program that will make simple graphs and calculate shortest paths between verticies.
@@ -24,14 +25,13 @@ class MainFrame extends JFrame {
 		setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		setLayout(new GridLayout(1, 1) );
 
-		ButtonPanel buttonPanel= new ButtonPanel(WIDTH / 2, HEIGHT / 2); 
-		add(buttonPanel);
-
 		GraphPanel graphPanel = new GraphPanel(WIDTH / 2, HEIGHT / 2);
-		add(graphPanel);
+		ButtonPanel buttonPanel= new ButtonPanel(WIDTH / 2, HEIGHT / 2, graphPanel); 
 		
-		buttonPanel.addGraphPanel(graphPanel);
 		graphPanel.addButtonPanel(buttonPanel);
+		
+		add(buttonPanel);
+		add(graphPanel);
 
 		setResizable(false);
 		setLocationRelativeTo(null); // Centers the frame on screen
@@ -44,21 +44,22 @@ class MainFrame extends JFrame {
 
 } // End MainFrame Class
 
-// TODO The panel where the graph will be drawn
 class GraphPanel extends JPanel {
-	private int width, height, vertX, vertY, vertW, vertH;
+	private int width, height, vertX, vertY, vStoreCap;
 	private ButtonPanel buttonPanel;
 	private ArrayList<Vertex> verticies;
 	private ArrayList<Edge> edges;
+	private ArrayList<Vertex> vStore;
 
 	public GraphPanel(int width, int height) {
 		setBorder(BorderFactory.createTitledBorder("Graph") );
 		setPreferredSize(new Dimension(width, height) );
 		setLayout(null);
 		
-		vertW = 20;
-		vertH = 20;
 		verticies = new ArrayList<Vertex>();
+		edges = new ArrayList<Edge>();
+		vStore = new ArrayList<Vertex>(2); // Stores the two verticies seleceted to make an edge
+		vStoreCap = 2;
 		
 		addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
@@ -72,8 +73,18 @@ class GraphPanel extends JPanel {
 						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i)) ) {
 							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
 							System.out.println();
-							System.out.println(e.getX() + ", "+ e.getY() );
-							break;
+							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
+							vStore.add(verticies.get(i) );
+							if (vStore.size() == vStoreCap) {
+								if (vStore.get(0) == vStore.get(1) )  
+									vStore.remove(1); 
+										
+								else {
+								    edges.add(new Edge(vStore.get(0), vStore.get(1) ) );
+								    drawEdge(vStore.get(0), vStore.get(1) );
+								    vStore.clear();
+								}
+							}
 						}
 					}
 				}
@@ -86,11 +97,15 @@ class GraphPanel extends JPanel {
 		
 			}
 		});
-	}
+	} // End Constructor
+	
+	public ArrayList<Vertex> getVerticies() { return verticies; }
+	
+	public ArrayList<Edge> getEdges() { return edges; }
 	
 	// Will find the the closest Vertex where the user clicked depending on the offset.
 	private boolean findClosestVertex(int x, int y, Vertex v) {
-		int offset = 20;
+		int offset = 10;
 		if ( ( (x - v.getX() >= 0) && (x - v.getX() <= offset)  ||
 			(v.getX() - x <= offset) && (v.getX() - x >= 0)  ) &&
 			( (y - v.getY() >= 0) && (y - v.getY() <= offset) ||
@@ -104,15 +119,31 @@ class GraphPanel extends JPanel {
 	private void drawVertex(int x, int y) {
 			vertX = x;
 			vertY = y;
-			repaint(vertX, vertY, vertW, vertH);
+			repaint();
+	}
+	
+	private void drawEdge(Vertex v1, Vertex v2) {
+		repaint();
+	}
+	
+	protected void redrawGraph(Graphics g) {
+		for(Vertex v: verticies)
+			v.paintVertex(g);
+		
+		for(Edge e: edges) 
+			e.paintEdge(g);
 	}
 	
 	@Override
 	protected void paintComponent(Graphics g) {
-		if (buttonPanel.vertexButtonIsOn() ) {
-		    super.paintComponent(g);
+		super.paintComponent(g);
+		if (buttonPanel.vertexButtonIsOn() ) 
 		    verticies.get(verticies.size() - 1).paintVertex(g);
-		}
+		
+		if(buttonPanel.edgeButtonIsOn() )
+			edges.get(edges.size() - 1).paintEdge(g);
+		
+		redrawGraph(g);
 	}
 	
 	public void addButtonPanel(ButtonPanel panel) { buttonPanel = panel; } // Allows manipulation of button panel in the graph panel
@@ -139,10 +170,12 @@ class ButtonPanel extends JPanel {
 	
 	ButtonGroup group;
 
-	public ButtonPanel(int width, int height) {
+	public ButtonPanel(int width, int height, GraphPanel gp) {
 		setBorder(BorderFactory.createTitledBorder("Options") );
 		setPreferredSize(new Dimension(width, height) );
 		setLayout(new GridBagLayout() );
+		
+		graphPanel = gp;
 		
 		radioButtons = new ArrayList<JRadioButton>();
 		jButtons = new ArrayList<JButton>();
@@ -189,6 +222,7 @@ class ButtonPanel extends JPanel {
 		
 		randomWeights = new JButton("Random Weights");
 		jButtons.add(randomWeights);
+		randomWeights.addActionListener(new RandomWeightAction(graphPanel) );
 		
 		minSpanningTree = new JButton("Minimal Spanning Tree");
 		jButtons.add(minSpanningTree);
@@ -205,8 +239,6 @@ class ButtonPanel extends JPanel {
 			add(jButtons.get(i), gbc);
 			jButtons.get(i).setFont(jButtons.get(i).getFont().deriveFont(24.0f));
 		}
-
-		
 	} 
 	
 	public void addGraphPanel(GraphPanel panel) { graphPanel = panel; } // Allows manipulation of the graph panel in the button panel
@@ -244,28 +276,62 @@ class Vertex {
 	public String toString() { return xCord + ", " + yCord; }
 	
 	public void paintVertex(Graphics g) {
+		int x, y;
+		x = xCord - (vertW / 2);
+		y = yCord - (vertH / 2);
+		
 		g.setColor(Color.RED);
-		g.fillOval(xCord, yCord, vertW, vertH);
+		g.fillOval(x, y, vertW, vertH);
 		g.setColor(Color.BLACK);
-		g.drawOval(xCord, yCord, vertW, vertH);
+		g.drawOval(x, y, vertW, vertH);
 	}
 } // End Vertex
 
 class Edge {
-	private int xCord, yCord, edgeW, edgeH;
+	private int xCord, yCord, midpointX, midpointY, weight;
 	private Vertex vertex1, vertex2;
 	
 	public Edge(Vertex v1, Vertex v2) {
 		vertex1 = v1;
 		vertex2 = v2;
+		midpointX = (v1.getX() + v2.getX() ) / 2;
+		midpointY = (v1.getY() + v2.getY() ) / 2;
+		weight = 0;
 	}
 	
 	public int getX() { return xCord; }
 	
 	public int getY() { return yCord; }
 	
+	public int getWeight() { return weight; }
+	
+	public void setWeight(int w) { weight = w; }
+	
 	public void paintEdge(Graphics g) {
 		g.setColor(Color.BLUE);
+		g.drawLine(vertex1.getX(), vertex1.getY(), vertex2.getX(), vertex2.getY());
+		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
+		g.drawString(Integer.toString(weight), midpointX, midpointY);
+	}
+} // End Edge
+
+class RandomWeightAction implements ActionListener {
+	private GraphPanel graphPanel;
+	private Random rand;
+	private Graphics g;
+	
+	public RandomWeightAction(GraphPanel gp) {
+		graphPanel = gp;
+		rand = new Random();
+	}
+	
+	@Override
+	public void actionPerformed(ActionEvent arg0) {
+		for (int i = 0; i < graphPanel.getEdges().size(); i++) {
+			int n = rand.nextInt(20) + 1;
+			( (Edge) graphPanel.getEdges().get(i)).setWeight(n);
+			graphPanel.repaint();
+		}
 	}
 }
 
@@ -295,7 +361,6 @@ class HelpAction implements ActionListener {
 			panel.add(labels[i], gbc);
 		}
 
-		// TODO explain what the buttons do in detail.
 		labels[0].setText("How to Use: ");
 		labels[0].setFont(new Font("Century", Font.PLAIN, 50) );
 		labels[1].setText("Add Vertex: Click on an area on the graph panel to place a vertex. ");
