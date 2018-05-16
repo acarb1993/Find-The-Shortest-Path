@@ -2,7 +2,10 @@ import java.awt.*;
 import javax.swing.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Random;
+import java.util.PriorityQueue;
 
 /* Adam Carballido
  *  A Java program that will make simple graphs and calculate shortest paths between verticies.
@@ -49,8 +52,10 @@ class GraphPanel extends JPanel {
 	private ButtonPanel buttonPanel;
 	private ArrayList<Vertex> verticies;
 	private ArrayList<Edge> edges;
+	private ArrayList<Vertex> shortestPath;
 	private ArrayList<Vertex> vStore;
-
+	private HashMap<Vertex, Vertex> adjacencyMap;
+	
 	public GraphPanel(int width, int height) {
 		setBorder(BorderFactory.createTitledBorder("Graph") );
 		setPreferredSize(new Dimension(width, height) );
@@ -58,9 +63,12 @@ class GraphPanel extends JPanel {
 		
 		verticies = new ArrayList<Vertex>();
 		edges = new ArrayList<Edge>();
+		shortestPath = new ArrayList<Vertex>();
 		vStore = new ArrayList<Vertex>(2); // Stores the two verticies seleceted to make an edge
 		vStoreCap = 2;
 		
+		adjacencyMap = new HashMap<Vertex, Vertex>();
+	
 		addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
 				if (buttonPanel.vertexButtonIsOn() ) {
@@ -70,7 +78,7 @@ class GraphPanel extends JPanel {
 				
 				else if (buttonPanel.edgeButtonIsOn() ) {
 					for (int i = 0; i < verticies.size(); i++) {
-						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i)) ) {
+						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
 							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
 							System.out.println();
 							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
@@ -82,7 +90,53 @@ class GraphPanel extends JPanel {
 								else {
 								    edges.add(new Edge(vStore.get(0), vStore.get(1) ) );
 								    drawEdge(vStore.get(0), vStore.get(1) );
+								    vStore.get(0).addToAdjacencyList(vStore.get(1) );
+								    vStore.get(1).addToAdjacencyList(vStore.get(0) );
+								    adjacencyMap.put(vStore.get(0), vStore.get(1) );
 								    vStore.clear();
+								}
+							}
+						}
+					}
+				} // end else if
+				
+				else if (buttonPanel.shortestPathButtonIsOn() ) {
+					for (int i = 0; i < verticies.size(); i++) {
+						if(findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
+							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
+							System.out.println();
+							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
+							vStore.add(verticies.get(i) );
+							if(vStore.size() == vStoreCap) {
+								if(vStore.get(0) == vStore.get(1) )
+									vStore.remove(1);
+								
+								else {
+									PriorityQueue<Vertex> heap = new PriorityQueue<Vertex>(verticies.size(), new VertexComparator() );
+									heap.add(vStore.get(0));
+									for (Vertex v: verticies) {
+										if (v == vStore.get(0) )
+											v.setDistanceValue(0);
+										else {
+											v.setDistanceValue(Integer.MAX_VALUE);
+											heap.add(v);
+										}
+									}
+									
+									while(!heap.isEmpty() ) {
+										shortestPath.add(heap.remove() );
+										// Edge Relaxation
+										for(Edge eg: edges) {
+											if ( (eg.getVertex1().getDistanceValue() + eg.getWeight() ) < eg.getVertex2().getDistanceValue() )
+												eg.getVertex2().setDistanceValue(eg.getVertex1().getDistanceValue() + eg.getWeight() );
+										}
+										
+									}
+									for (Vertex v: shortestPath)
+										System.out.println(v.getName() );
+									
+									shortestPath.clear();
+									vStore.clear();
 								}
 							}
 						}
@@ -257,13 +311,20 @@ class ButtonPanel extends JPanel {
 } // End ButtonPanel Class
 
 class Vertex {
-	private int xCord, yCord, vertW, vertH;
+	private int xCord, yCord, vertW, vertH, distanceValue;
+	private char name; // The letter name starting with 'a' of the vertex
+	private static int numberOfVerticies = 0;
+	private ArrayList<Vertex> adjacencyList;
 	
 	public Vertex(int x, int y) {
 		xCord = x;
 		yCord = y;
 		vertW = 20;
 		vertH = 20;
+		distanceValue = 0;
+		numberOfVerticies++;
+		name = (char) ('a' + numberOfVerticies - 1);
+		adjacencyList = new ArrayList<Vertex>();
 	}
 	
 	// Returns the value of the x Coordinate
@@ -271,6 +332,16 @@ class Vertex {
 	
 	// Returns the value of the y Coordinate
 	public int getY() { return yCord; }
+	
+	public int getDistanceValue() { return distanceValue; }
+	
+	public void setDistanceValue(int d) { d = distanceValue; }
+	
+	public char getName() { return name; }
+	
+	public ArrayList<Vertex> getAdjacencyList() { return adjacencyList; }
+	
+	public void addToAdjacencyList(Vertex v) { adjacencyList.add(v); }
 	
 	@Override
 	public String toString() { return xCord + ", " + yCord; }
@@ -284,7 +355,10 @@ class Vertex {
 		g.fillOval(x, y, vertW, vertH);
 		g.setColor(Color.BLACK);
 		g.drawOval(x, y, vertW, vertH);
+		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
+		g.drawString(Character.toString(name), x, y);
 	}
+
 } // End Vertex
 
 class Edge {
@@ -313,12 +387,16 @@ class Edge {
 		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
 		g.drawString(Integer.toString(weight), midpointX, midpointY);
 	}
+	
+	public Vertex getVertex1() { return vertex1; }
+	
+	public Vertex getVertex2() { return vertex2; }
+	
 } // End Edge
 
 class RandomWeightAction implements ActionListener {
 	private GraphPanel graphPanel;
 	private Random rand;
-	private Graphics g;
 	
 	public RandomWeightAction(GraphPanel gp) {
 		graphPanel = gp;
@@ -333,7 +411,21 @@ class RandomWeightAction implements ActionListener {
 			graphPanel.repaint();
 		}
 	}
-}
+} // End RandomWeightAction
+
+class VertexComparator implements Comparator<Vertex> {
+
+	@Override
+	public int compare(Vertex v1, Vertex v2) {
+		if (v1.getDistanceValue() - v2.getDistanceValue() > 0) 
+			return 1;
+		
+		else if (v1.getDistanceValue() - v2.getDistanceValue() < 0)
+			return -1;
+		
+		else return 0;
+	}
+} // End VertexComparator
 
 // Action for the help button
 class HelpAction implements ActionListener {
