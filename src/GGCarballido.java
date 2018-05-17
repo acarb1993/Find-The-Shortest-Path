@@ -2,10 +2,13 @@ import java.awt.*;
 import javax.swing.*;
 import java.awt.event.*;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Random;
-import java.util.PriorityQueue;
+import java.util.Set;
 
 /* Adam Carballido
  *  A Java program that will make simple graphs and calculate shortest paths between verticies.
@@ -49,25 +52,39 @@ class MainFrame extends JFrame {
 
 class GraphPanel extends JPanel {
 	private int width, height, vertX, vertY, vStoreCap;
+	
 	private ButtonPanel buttonPanel;
+	
 	private ArrayList<Vertex> verticies;
+	private ArrayList<Vertex> tempVerticies;
+	private ArrayList<Edge> tempEdges;
 	private ArrayList<Edge> edges;
-	private ArrayList<Vertex> shortestPath;
 	private ArrayList<Vertex> vStore;
-	private HashMap<Vertex, Vertex> adjacencyMap;
+	LinkedList<Vertex> shortestPath;
+	
+	private Set<Vertex> settledNodes;
+	private Set<Vertex> unSettledNodes;
+	
+	private HashMap<Vertex, Vertex> predecessors;
+	private HashMap<Vertex, Integer> distance;
+	
 	
 	public GraphPanel(int width, int height) {
-		setBorder(BorderFactory.createTitledBorder("Graph") );
-		setPreferredSize(new Dimension(width, height) );
-		setLayout(null);
+		width = height = vertX = vertY = 0;
 		
 		verticies = new ArrayList<Vertex>();
 		edges = new ArrayList<Edge>();
-		shortestPath = new ArrayList<Vertex>();
 		vStore = new ArrayList<Vertex>(2); // Stores the two verticies seleceted to make an edge
 		vStoreCap = 2;
+
+		settledNodes = new HashSet<Vertex>();
+		unSettledNodes = new HashSet<Vertex>();
+		distance = new HashMap<Vertex, Integer>();
+		predecessors = new HashMap<Vertex, Vertex>();
 		
-		adjacencyMap = new HashMap<Vertex, Vertex>();
+		setBorder(BorderFactory.createTitledBorder("Graph") );		
+		setPreferredSize(new Dimension(width, height) );
+		setLayout(null);
 	
 		addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
@@ -87,18 +104,29 @@ class GraphPanel extends JPanel {
 								if (vStore.get(0) == vStore.get(1) )  
 									vStore.remove(1); 
 										
-								else {
+								else { 
 								    edges.add(new Edge(vStore.get(0), vStore.get(1) ) );
 								    drawEdge(vStore.get(0), vStore.get(1) );
 								    vStore.get(0).addToAdjacencyList(vStore.get(1) );
 								    vStore.get(1).addToAdjacencyList(vStore.get(0) );
-								    adjacencyMap.put(vStore.get(0), vStore.get(1) );
 								    vStore.clear();
 								}
 							}
 						}
 					}
 				} // end else if
+				
+				else if (buttonPanel.moveVertexButtonIsOn() ) {
+					for (int i = 0; i < verticies.size(); i++) {
+						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
+							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
+							System.out.println();
+							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
+							vStore.add(verticies.get(i) );
+						}
+					}
+					vStore.clear();
+				}
 				
 				else if (buttonPanel.shortestPathButtonIsOn() ) {
 					for (int i = 0; i < verticies.size(); i++) {
@@ -111,38 +139,36 @@ class GraphPanel extends JPanel {
 								if(vStore.get(0) == vStore.get(1) )
 									vStore.remove(1);
 								
-								else {
-									PriorityQueue<Vertex> heap = new PriorityQueue<Vertex>(verticies.size(), new VertexComparator() );
-									heap.add(vStore.get(0));
-									for (Vertex v: verticies) {
-										if (v == vStore.get(0) )
-											v.setDistanceValue(0);
-										else {
-											v.setDistanceValue(Integer.MAX_VALUE);
-											heap.add(v);
-										}
-									}
+								else { // Dijkstra's Algorithm
+									distance.put(vStore.get(0), 0);
+									unSettledNodes.add(vStore.get(0));
+									tempVerticies = verticies;
+									tempEdges = edges;
 									
-									while(!heap.isEmpty() ) {
-										shortestPath.add(heap.remove() );
-										// Edge Relaxation
-										for(Edge eg: edges) {
-											if ( (eg.getVertex1().getDistanceValue() + eg.getWeight() ) < eg.getVertex2().getDistanceValue() )
-												eg.getVertex2().setDistanceValue(eg.getVertex1().getDistanceValue() + eg.getWeight() );
-										}
-										
+									while(unSettledNodes.size() > 0) {
+										Vertex node = getMinimum(unSettledNodes);
+										settledNodes.add(node);
+										unSettledNodes.remove(node);
+										findMinimalDistances(node);
 									}
-									for (Vertex v: shortestPath)
-										System.out.println(v.getName() );
+									shortestPath = getPath(vStore.get(1) );
+									for (i = 0; i < shortestPath.size(); i++) {
+										System.out.println(shortestPath.get(i).getName() );
 									
-									shortestPath.clear();
+									}
+									// Starts everything from scratch after the algo is done.
 									vStore.clear();
+									shortestPath.clear();
+									settledNodes.clear();
+									unSettledNodes.clear();
+									distance.clear();
+									predecessors.clear();
 								}
 							}
 						}
 					}
-				}
-			}
+				} // end else if
+			} // end mouse pressed
 		});
 
 		// TODO move Vertex
@@ -152,6 +178,79 @@ class GraphPanel extends JPanel {
 			}
 		});
 	} // End Constructor
+	
+	public LinkedList<Vertex> getShortestPath() { return shortestPath; }
+	
+	private void findMinimalDistances(Vertex node) {
+		ArrayList<Vertex> adjacentNodes = getNeighbors(node);
+		for (Vertex t: adjacentNodes) {
+			if (getShortestDistance(t) > getShortestDistance(node) 
+					+ getDistance(node, t) ) {
+				distance.put(t, getShortestDistance(node) 
+						+ getDistance(node, t) );
+				predecessors.put(t, node);
+				unSettledNodes.add(t);
+			}
+		}
+	}
+	
+	private int getDistance(Vertex node, Vertex target) {
+		for (Edge e: tempEdges) {
+			if (e.getSource().equals(node)
+					&& e.getDestination().equals(target) ) {
+				return e.getWeight();
+			}
+		}
+		throw new RuntimeException("Snarf");
+	}
+	
+	private ArrayList<Vertex> getNeighbors(Vertex node) {
+		ArrayList<Vertex> neighbors = new ArrayList<Vertex>();
+		for(Edge e: tempEdges) {
+			if (e.getSource().equals(node) 
+					&& !isSettled(e.getDestination() ) ) {
+				neighbors.add(e.getDestination() );
+			}
+		}
+		return neighbors;
+	}
+	
+	private Vertex getMinimum(Set<Vertex> tempVerticies) {
+		Vertex min = null; 
+		for (Vertex v: tempVerticies) {
+			if (min == null) { min = v; }
+			
+			else { if (getShortestDistance(v) < getShortestDistance(min) ) { min = v; } }
+		}
+		
+		return min;
+	}
+	
+	private int getShortestDistance(Vertex destination) {
+		Integer d = distance.get(destination);
+		if(d == null) { return Integer.MAX_VALUE; }
+		
+		else { return d; }
+	}
+	
+	private boolean isSettled(Vertex v) { return settledNodes.contains(v); }
+	
+	public LinkedList<Vertex> getPath(Vertex t) {
+		LinkedList<Vertex> path = new LinkedList<Vertex>();
+		Vertex step = t;
+		
+		if(predecessors.get(step) == null) {
+			return null;
+		}
+		
+		path.add(step);
+		while(predecessors.get(step) != null) {
+			step = predecessors.get(step);
+			path.add(step);
+		}
+		Collections.reverse(path);
+		return path;
+	}
 	
 	public ArrayList<Vertex> getVerticies() { return verticies; }
 	
@@ -176,7 +275,7 @@ class GraphPanel extends JPanel {
 			repaint();
 	}
 	
-	private void drawEdge(Vertex v1, Vertex v2) {
+	private void drawEdge(Vertex source, Vertex desination) {
 		repaint();
 	}
 	
@@ -315,6 +414,7 @@ class Vertex {
 	private char name; // The letter name starting with 'a' of the vertex
 	private static int numberOfVerticies = 0;
 	private ArrayList<Vertex> adjacencyList;
+	private boolean isSelected;
 	
 	public Vertex(int x, int y) {
 		xCord = x;
@@ -325,6 +425,7 @@ class Vertex {
 		numberOfVerticies++;
 		name = (char) ('a' + numberOfVerticies - 1);
 		adjacencyList = new ArrayList<Vertex>();
+		isSelected = false;
 	}
 	
 	// Returns the value of the x Coordinate
@@ -342,6 +443,17 @@ class Vertex {
 	public ArrayList<Vertex> getAdjacencyList() { return adjacencyList; }
 	
 	public void addToAdjacencyList(Vertex v) { adjacencyList.add(v); }
+	
+	public void moveVertex(int newX, int newY) {
+		xCord = newX;
+		yCord = newY;
+	}
+	
+	public void toggleSelected() { 
+		if (isSelected) isSelected = false;
+		
+		else isSelected = true;
+	}
 	
 	@Override
 	public String toString() { return xCord + ", " + yCord; }
@@ -363,13 +475,13 @@ class Vertex {
 
 class Edge {
 	private int xCord, yCord, midpointX, midpointY, weight;
-	private Vertex vertex1, vertex2;
+	private Vertex source, destination; // Source is starting vertex, destination is ending vertex
 	
-	public Edge(Vertex v1, Vertex v2) {
-		vertex1 = v1;
-		vertex2 = v2;
-		midpointX = (v1.getX() + v2.getX() ) / 2;
-		midpointY = (v1.getY() + v2.getY() ) / 2;
+	public Edge(Vertex s, Vertex d) {
+		source = s;
+		destination = d;
+		midpointX = (source.getX() + destination.getX() ) / 2;
+		midpointY = (source.getY() + destination.getY() ) / 2;
 		weight = 0;
 	}
 	
@@ -383,14 +495,14 @@ class Edge {
 	
 	public void paintEdge(Graphics g) {
 		g.setColor(Color.BLUE);
-		g.drawLine(vertex1.getX(), vertex1.getY(), vertex2.getX(), vertex2.getY());
+		g.drawLine(source.getX(), source.getY(), destination.getX(), destination.getY());
 		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
 		g.drawString(Integer.toString(weight), midpointX, midpointY);
 	}
 	
-	public Vertex getVertex1() { return vertex1; }
+	public Vertex getSource() { return source; }
 	
-	public Vertex getVertex2() { return vertex2; }
+	public Vertex getDestination() { return destination; }
 	
 } // End Edge
 
