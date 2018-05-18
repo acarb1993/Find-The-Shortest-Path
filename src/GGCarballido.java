@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 
@@ -58,8 +59,10 @@ class GraphPanel extends JPanel {
 	private ArrayList<Vertex> verticies; // Positional verticie list
 	private ArrayList<Edge> edges; // Positional edge list
 	private ArrayList<Vertex> vStore;
-	private ArrayList<Vertex> shortestPath;
 	private HashMap<Vertex, Edge> adjacencyMap;
+	private HashMap<Vertex, Integer> distances;
+	private HashMap<Vertex, Vertex> predecessors;
+	private PriorityQueue<Vertex> pq;
 	
 	public GraphPanel(int width, int height) {
 		width = height = vertX = vertY = 0;
@@ -68,8 +71,9 @@ class GraphPanel extends JPanel {
 		edges = new ArrayList<Edge>();
 		vStore = new ArrayList<Vertex>(2); // Stores the two verticies seleceted to make an edge
 		vStoreCap = 2;
-		shortestPath = new ArrayList<Vertex>();
 		adjacencyMap = new HashMap<Vertex, Edge>(); 
+		distances = new HashMap<Vertex, Integer>();
+		predecessors = new HashMap<Vertex, Vertex>();
 		
 		setBorder(BorderFactory.createTitledBorder("Graph") );		
 		setPreferredSize(new Dimension(width, height) );
@@ -97,8 +101,6 @@ class GraphPanel extends JPanel {
 								    edges.add(insertEdge(vStore.get(0), vStore.get(1) ) );
 								    adjacencyMap.put(vStore.get(0), getLastEdgeAdded() );
 								    adjacencyMap.put(vStore.get(1), getLastEdgeAdded() );
-								    System.out.println(adjacencyMap);
-								    System.out.println(adjacencyMap.values());
 								    vStore.clear();
 								}
 							}
@@ -130,15 +132,66 @@ class GraphPanel extends JPanel {
 									vStore.remove(1);
 								
 								else { // Dijkstra's Algorithm
-									
+									shortestPath(vStore.get(0));
+									ArrayList<Vertex> twoPointsPath = shortestPath(vStore.get(0), vStore.get(1));
+									for (i = 0; i < twoPointsPath.size(); i++) {
+										System.out.println(twoPointsPath.get(i).getName() );
+										edges.get(i).toggleSelected();
+									}
+									distances.clear();
+									predecessors.clear();
+									vStore.clear();
 								}
 							}
 						}
 					}
-					vStore.clear();
 				} // end else if
 			} // end mouse pressed
 		});
+	} // End constructor
+	
+	public ArrayList<Vertex> shortestPath(Vertex source, Vertex target) {
+		ArrayList<Vertex> path = new ArrayList<Vertex>();
+		Vertex step = target;
+		
+		path.add(step);
+		while(predecessors.get(step) != null) {
+			step = predecessors.get(step);
+			path.add(step);
+		}
+		
+		Collections.reverse(path);
+		
+		for (int i = 1; i < path.size() - 1; i ++)
+			getEdge(path.get(i), path.get(i + 1)).toggleSelected();
+		
+		repaint();
+		
+		return path;
+	}
+	
+	public void shortestPath(Vertex source) {
+		pq = new PriorityQueue<Vertex>();
+		distances.put(source, 0);
+		for (Vertex v : verticies) {
+			if (v != source)
+				distances.put(v, 99);
+			pq.add(v);
+		}
+		
+		while (!pq.isEmpty()) {
+			Vertex u = pq.remove();
+			for (Vertex v : u.getAdjacencyMap().keySet() ) {
+				if (distances.get(v) > distances.get(u) + getEdge(u, v).getWeight() ) {
+					distances.replace(v, distances.get(u) + getEdge(u, v).getWeight());
+					pq.add(v);
+					predecessors.put(v, u);
+				}
+			}
+		}
+		
+		System.out.println(distances.toString() );
+		System.out.println(predecessors.toString() );
 	}
 	
 	// Returns the edge from u to v, or null if they are not adjacent;
@@ -161,8 +214,10 @@ class GraphPanel extends JPanel {
 			return endpoints[1];
 		else if (endpoints[1] == v)
 			return endpoints[0];
-		else
+		else {
+			vStore.clear();
 			throw new IllegalArgumentException("v is not incident to this edge");
+		}
 	}
 	
 	public Edge insertEdge(Vertex u, Vertex v) throws IllegalArgumentException {
@@ -182,8 +237,6 @@ class GraphPanel extends JPanel {
 	}
 	
 	public Edge getLastEdgeAdded() { return edges.get(edges.size() - 1); }
-	
-	public ArrayList<Vertex> getShortestPath() { return shortestPath; }
 	
 	public ArrayList<Vertex> getVerticies() { return verticies; }
 	
@@ -410,12 +463,14 @@ class Vertex implements Comparable<Vertex> {
 class Edge {
 	private int xCord, yCord, midpointX, midpointY, weight;
 	private Vertex[] endpoints; // Source is starting vertex, destination is ending vertex
+	private boolean isSelected;
 	
 	public Edge(Vertex s, Vertex d) {
 		endpoints = (Vertex[]) new Vertex[] {s, d};
 		midpointX = (endpoints[0].getX() + endpoints[1].getX() ) / 2;
 		midpointY = (endpoints[0].getY() + endpoints[1].getY() ) / 2;
 		weight = 0;
+		isSelected = false;
 	}
 	
 	public int getX() { return xCord; }
@@ -429,7 +484,11 @@ class Edge {
 	public void setWeight(int w) { weight = w; }
 	
 	public void paintEdge(Graphics g) {
-		g.setColor(Color.BLUE);
+		if(isSelected) 
+			g.setColor(Color.GREEN);
+		
+		else 
+			g.setColor(Color.BLUE);
 		g.drawLine(endpoints[0].getX(), endpoints[0].getY(), endpoints[1].getX(), endpoints[1].getY());
 		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
 		g.drawString(Integer.toString(weight), midpointX, midpointY);
@@ -438,6 +497,8 @@ class Edge {
 	public Vertex getSource() { return endpoints[0]; }
 	
 	public Vertex getDestination() { return endpoints[1]; }
+	
+	public void toggleSelected() { isSelected = !isSelected; }
 	
 } // End Edge
 
