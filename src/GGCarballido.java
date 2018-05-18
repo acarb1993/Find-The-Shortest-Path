@@ -55,19 +55,11 @@ class GraphPanel extends JPanel {
 	
 	private ButtonPanel buttonPanel;
 	
-	private ArrayList<Vertex> verticies;
-	private ArrayList<Vertex> tempVerticies;
-	private ArrayList<Edge> tempEdges;
-	private ArrayList<Edge> edges;
+	private ArrayList<Vertex> verticies; // Positional verticie list
+	private ArrayList<Edge> edges; // Positional edge list
 	private ArrayList<Vertex> vStore;
-	LinkedList<Vertex> shortestPath;
-	
-	private Set<Vertex> settledNodes;
-	private Set<Vertex> unSettledNodes;
-	
-	private HashMap<Vertex, Vertex> predecessors;
-	private HashMap<Vertex, Integer> distance;
-	
+	private ArrayList<Vertex> shortestPath;
+	private HashMap<Vertex, Edge> adjacencyMap;
 	
 	public GraphPanel(int width, int height) {
 		width = height = vertX = vertY = 0;
@@ -76,11 +68,8 @@ class GraphPanel extends JPanel {
 		edges = new ArrayList<Edge>();
 		vStore = new ArrayList<Vertex>(2); // Stores the two verticies seleceted to make an edge
 		vStoreCap = 2;
-
-		settledNodes = new HashSet<Vertex>();
-		unSettledNodes = new HashSet<Vertex>();
-		distance = new HashMap<Vertex, Integer>();
-		predecessors = new HashMap<Vertex, Vertex>();
+		shortestPath = new ArrayList<Vertex>();
+		adjacencyMap = new HashMap<Vertex, Edge>(); 
 		
 		setBorder(BorderFactory.createTitledBorder("Graph") );		
 		setPreferredSize(new Dimension(width, height) );
@@ -105,10 +94,11 @@ class GraphPanel extends JPanel {
 									vStore.remove(1); 
 										
 								else { 
-								    edges.add(new Edge(vStore.get(0), vStore.get(1) ) );
-								    drawEdge(vStore.get(0), vStore.get(1) );
-								    vStore.get(0).addToAdjacencyList(vStore.get(1) );
-								    vStore.get(1).addToAdjacencyList(vStore.get(0) );
+								    edges.add(insertEdge(vStore.get(0), vStore.get(1) ) );
+								    adjacencyMap.put(vStore.get(0), getLastEdgeAdded() );
+								    adjacencyMap.put(vStore.get(1), getLastEdgeAdded() );
+								    System.out.println(adjacencyMap);
+								    System.out.println(adjacencyMap.values());
 								    vStore.clear();
 								}
 							}
@@ -140,117 +130,60 @@ class GraphPanel extends JPanel {
 									vStore.remove(1);
 								
 								else { // Dijkstra's Algorithm
-									distance.put(vStore.get(0), 0);
-									unSettledNodes.add(vStore.get(0));
-									tempVerticies = verticies;
-									tempEdges = edges;
 									
-									while(unSettledNodes.size() > 0) {
-										Vertex node = getMinimum(unSettledNodes);
-										settledNodes.add(node);
-										unSettledNodes.remove(node);
-										findMinimalDistances(node);
-									}
-									shortestPath = getPath(vStore.get(1) );
-									for (i = 0; i < shortestPath.size(); i++) {
-										System.out.println(shortestPath.get(i).getName() );
-									
-									}
-									// Starts everything from scratch after the algo is done.
-									vStore.clear();
-									shortestPath.clear();
-									settledNodes.clear();
-									unSettledNodes.clear();
-									distance.clear();
-									predecessors.clear();
 								}
 							}
 						}
 					}
+					vStore.clear();
 				} // end else if
 			} // end mouse pressed
 		});
-
-		// TODO move Vertex
-		addMouseListener(new MouseAdapter() {
-			public void mouseDragged(MouseEvent e) {
-		
-			}
-		});
-	} // End Constructor
+	}
 	
-	public LinkedList<Vertex> getShortestPath() { return shortestPath; }
+	// Returns the edge from u to v, or null if they are not adjacent;
+	public Edge getEdge(Vertex u, Vertex v) {
+		Vertex origin = u;
+		return origin.getAdjacencyMap().get(v);
+	}
 	
-	private void findMinimalDistances(Vertex node) {
-		ArrayList<Vertex> adjacentNodes = getNeighbors(node);
-		for (Vertex t: adjacentNodes) {
-			if (getShortestDistance(t) > getShortestDistance(node) 
-					+ getDistance(node, t) ) {
-				distance.put(t, getShortestDistance(node) 
-						+ getDistance(node, t) );
-				predecessors.put(t, node);
-				unSettledNodes.add(t);
-			}
+	// Returns the verticies of edge e as an array of length two
+	public Vertex[] endVerticies(Edge e){
+		Edge edge = e;
+		return e.getEndPoints();
+	}
+	
+	// Returns the vertex that is opposite vertex v on edge e
+	public Vertex opposite(Vertex v, Edge e) throws IllegalArgumentException {
+		Edge edge = e;
+		Vertex[] endpoints = edge.getEndPoints();
+		if (endpoints[0] == v)
+			return endpoints[1];
+		else if (endpoints[1] == v)
+			return endpoints[0];
+		else
+			throw new IllegalArgumentException("v is not incident to this edge");
+	}
+	
+	public Edge insertEdge(Vertex u, Vertex v) throws IllegalArgumentException {
+		if (getEdge(u, v) == null) {
+			Edge e = new Edge(u, v);
+			drawEdge(u, v);
+			Vertex origin = u;
+			Vertex destination = v;
+			origin.getAdjacencyMap().put(v, e);
+			destination.getAdjacencyMap().put(u, e);
+			return e;
+		}
+		else {
+			vStore.clear();
+			throw new IllegalArgumentException("Edge from u to v exists");
 		}
 	}
 	
-	private int getDistance(Vertex node, Vertex target) {
-		for (Edge e: tempEdges) {
-			if (e.getSource().equals(node)
-					&& e.getDestination().equals(target) ) {
-				return e.getWeight();
-			}
-		}
-		throw new RuntimeException("Snarf");
-	}
+	public Edge getLastEdgeAdded() { return edges.get(edges.size() - 1); }
 	
-	private ArrayList<Vertex> getNeighbors(Vertex node) {
-		ArrayList<Vertex> neighbors = new ArrayList<Vertex>();
-		for(Edge e: tempEdges) {
-			if (e.getSource().equals(node) 
-					&& !isSettled(e.getDestination() ) ) {
-				neighbors.add(e.getDestination() );
-			}
-		}
-		return neighbors;
-	}
-	
-	private Vertex getMinimum(Set<Vertex> tempVerticies) {
-		Vertex min = null; 
-		for (Vertex v: tempVerticies) {
-			if (min == null) { min = v; }
-			
-			else { if (getShortestDistance(v) < getShortestDistance(min) ) { min = v; } }
-		}
-		
-		return min;
-	}
-	
-	private int getShortestDistance(Vertex destination) {
-		Integer d = distance.get(destination);
-		if(d == null) { return Integer.MAX_VALUE; }
-		
-		else { return d; }
-	}
-	
-	private boolean isSettled(Vertex v) { return settledNodes.contains(v); }
-	
-	public LinkedList<Vertex> getPath(Vertex t) {
-		LinkedList<Vertex> path = new LinkedList<Vertex>();
-		Vertex step = t;
-		
-		if(predecessors.get(step) == null) {
-			return null;
-		}
-		
-		path.add(step);
-		while(predecessors.get(step) != null) {
-			step = predecessors.get(step);
-			path.add(step);
-		}
-		Collections.reverse(path);
-		return path;
-	}
+	public ArrayList<Vertex> getShortestPath() { return shortestPath; }
 	
 	public ArrayList<Vertex> getVerticies() { return verticies; }
 	
@@ -409,11 +342,11 @@ class ButtonPanel extends JPanel {
 	
 } // End ButtonPanel Class
 
-class Vertex {
+class Vertex implements Comparable<Vertex> {
 	private int xCord, yCord, vertW, vertH, distanceValue;
 	private char name; // The letter name starting with 'a' of the vertex
 	private static int numberOfVerticies = 0;
-	private ArrayList<Vertex> adjacencyList;
+	private HashMap<Vertex, Edge> adjacencyMap;
 	private boolean isSelected;
 	
 	public Vertex(int x, int y) {
@@ -424,7 +357,7 @@ class Vertex {
 		distanceValue = 0;
 		numberOfVerticies++;
 		name = (char) ('a' + numberOfVerticies - 1);
-		adjacencyList = new ArrayList<Vertex>();
+		adjacencyMap = new HashMap<Vertex, Edge>();
 		isSelected = false;
 	}
 	
@@ -440,20 +373,16 @@ class Vertex {
 	
 	public char getName() { return name; }
 	
-	public ArrayList<Vertex> getAdjacencyList() { return adjacencyList; }
+	public HashMap<Vertex, Edge> getAdjacencyMap() { return adjacencyMap; }
 	
-	public void addToAdjacencyList(Vertex v) { adjacencyList.add(v); }
+	public void addToAdjacencyMap(Vertex v, Edge e) { adjacencyMap.put(v, e); }
 	
 	public void moveVertex(int newX, int newY) {
 		xCord = newX;
 		yCord = newY;
 	}
 	
-	public void toggleSelected() { 
-		if (isSelected) isSelected = false;
-		
-		else isSelected = true;
-	}
+	public void toggleSelected() { isSelected = !isSelected; }
 	
 	@Override
 	public String toString() { return xCord + ", " + yCord; }
@@ -471,17 +400,21 @@ class Vertex {
 		g.drawString(Character.toString(name), x, y);
 	}
 
+	@Override
+	public int compareTo(Vertex v) {
+		return distanceValue - v.getDistanceValue();			
+	}
+
 } // End Vertex
 
 class Edge {
 	private int xCord, yCord, midpointX, midpointY, weight;
-	private Vertex source, destination; // Source is starting vertex, destination is ending vertex
+	private Vertex[] endpoints; // Source is starting vertex, destination is ending vertex
 	
 	public Edge(Vertex s, Vertex d) {
-		source = s;
-		destination = d;
-		midpointX = (source.getX() + destination.getX() ) / 2;
-		midpointY = (source.getY() + destination.getY() ) / 2;
+		endpoints = (Vertex[]) new Vertex[] {s, d};
+		midpointX = (endpoints[0].getX() + endpoints[1].getX() ) / 2;
+		midpointY = (endpoints[0].getY() + endpoints[1].getY() ) / 2;
 		weight = 0;
 	}
 	
@@ -491,18 +424,20 @@ class Edge {
 	
 	public int getWeight() { return weight; }
 	
+	public Vertex[] getEndPoints() { return endpoints; }
+	
 	public void setWeight(int w) { weight = w; }
 	
 	public void paintEdge(Graphics g) {
 		g.setColor(Color.BLUE);
-		g.drawLine(source.getX(), source.getY(), destination.getX(), destination.getY());
+		g.drawLine(endpoints[0].getX(), endpoints[0].getY(), endpoints[1].getX(), endpoints[1].getY());
 		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
 		g.drawString(Integer.toString(weight), midpointX, midpointY);
 	}
 	
-	public Vertex getSource() { return source; }
+	public Vertex getSource() { return endpoints[0]; }
 	
-	public Vertex getDestination() { return destination; }
+	public Vertex getDestination() { return endpoints[1]; }
 	
 } // End Edge
 
@@ -524,20 +459,6 @@ class RandomWeightAction implements ActionListener {
 		}
 	}
 } // End RandomWeightAction
-
-class VertexComparator implements Comparator<Vertex> {
-
-	@Override
-	public int compare(Vertex v1, Vertex v2) {
-		if (v1.getDistanceValue() - v2.getDistanceValue() > 0) 
-			return 1;
-		
-		else if (v1.getDistanceValue() - v2.getDistanceValue() < 0)
-			return -1;
-		
-		else return 0;
-	}
-} // End VertexComparator
 
 // Action for the help button
 class HelpAction implements ActionListener {
@@ -581,4 +502,3 @@ class HelpAction implements ActionListener {
 		frame.setVisible(true);
 	}
 } // End HelpAction Class
-

@@ -9,3 +9,8 @@
 /RandomWeightAction.class
 /Vertex.class
 /VertexComparator.class
+/AbstractPriorityQueue$PQEntry.class
+/AbstractPriorityQueue.class
+/DefaultComparator.class
+/Entry.class
+/PriorityQueue.class
