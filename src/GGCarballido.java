@@ -86,13 +86,12 @@ class GraphPanel extends JPanel {
 					verticies.add(new Vertex(e.getX(), e.getY()));
 				}
 				
-				else if (buttonPanel.edgeButtonIsOn() ) {
+				else if (buttonPanel.edgeButtonIsOn() ) {	
 					for (int i = 0; i < verticies.size(); i++) {
 						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
-							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
-							System.out.println();
-							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
 							vStore.add(verticies.get(i) );
+							verticies.get(i).turnOn();
+							repaint();
 							if (vStore.size() == vStoreCap) {
 								if (vStore.get(0) == vStore.get(1) )  
 									vStore.remove(1); 
@@ -111,9 +110,6 @@ class GraphPanel extends JPanel {
 				else if (buttonPanel.moveVertexButtonIsOn() ) {
 					for (int i = 0; i < verticies.size(); i++) {
 						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
-							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
-							System.out.println();
-							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
 							vStore.add(verticies.get(i) );
 						}
 					}
@@ -123,9 +119,6 @@ class GraphPanel extends JPanel {
 				else if (buttonPanel.shortestPathButtonIsOn() ) {
 					for (int i = 0; i < verticies.size(); i++) {
 						if(findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
-							System.out.print("Found a " + verticies.get(i).getClass().getName() + " at " + verticies.get(i).getX() + ", " + verticies.get(i).getY() );
-							System.out.println();
-							System.out.println("I clicked at: " + e.getX() + ", "+ e.getY() );
 							vStore.add(verticies.get(i) );
 							if(vStore.size() == vStoreCap) {
 								if(vStore.get(0) == vStore.get(1) )
@@ -136,7 +129,6 @@ class GraphPanel extends JPanel {
 									ArrayList<Vertex> twoPointsPath = shortestPath(vStore.get(0), vStore.get(1));
 									for (i = 0; i < twoPointsPath.size(); i++) {
 										System.out.println(twoPointsPath.get(i).getName() );
-										edges.get(i).toggleSelected();
 									}
 									distances.clear();
 									predecessors.clear();
@@ -150,7 +142,9 @@ class GraphPanel extends JPanel {
 		});
 	} // End constructor
 	
+	// Finds the shortest path between two verticies
 	public ArrayList<Vertex> shortestPath(Vertex source, Vertex target) {
+		turnOffEdges();
 		ArrayList<Vertex> path = new ArrayList<Vertex>();
 		Vertex step = target;
 		
@@ -158,11 +152,12 @@ class GraphPanel extends JPanel {
 		while(predecessors.get(step) != null) {
 			step = predecessors.get(step);
 			path.add(step);
+			
 		}
 		
-		Collections.reverse(path);
+		Collections.reverse(path);	
 		
-		for (int i = 1; i < path.size() - 1; i ++)
+		for (int i = 0; i < path.size() - 1; i++) 
 			getEdge(path.get(i), path.get(i + 1)).toggleSelected();
 		
 		repaint();
@@ -170,6 +165,7 @@ class GraphPanel extends JPanel {
 		return path;
 	}
 	
+	// Gets the distance values of the verticies. The source is the first selected Vertex
 	public void shortestPath(Vertex source) {
 		pq = new PriorityQueue<Vertex>();
 		distances.put(source, 0);
@@ -236,6 +232,16 @@ class GraphPanel extends JPanel {
 		}
 	}
 	
+	private void turnOffVerticies() {
+		for (Vertex v : verticies) 
+			v.turnOff();
+	}
+	
+	private void turnOffEdges() {
+		for (Edge e : edges) 
+			e.turnOff();
+	}
+	
 	public Edge getLastEdgeAdded() { return edges.get(edges.size() - 1); }
 	
 	public ArrayList<Vertex> getVerticies() { return verticies; }
@@ -279,7 +285,7 @@ class GraphPanel extends JPanel {
 		if (buttonPanel.vertexButtonIsOn() ) 
 		    verticies.get(verticies.size() - 1).paintVertex(g);
 		
-		if(buttonPanel.edgeButtonIsOn() )
+		if(buttonPanel.edgeButtonIsOn() && edges.size() > 0)
 			edges.get(edges.size() - 1).paintEdge(g);
 		
 		redrawGraph(g);
@@ -358,6 +364,7 @@ class ButtonPanel extends JPanel {
 
 		addAllEdges = new JButton("Add All Edges");
 		jButtons.add(addAllEdges);
+		addAllEdges.addActionListener(new AddAllEdgesAction(graphPanel, graphPanel.getVerticies() ) );
 		
 		randomWeights = new JButton("Random Weights");
 		jButtons.add(randomWeights);
@@ -405,8 +412,8 @@ class Vertex implements Comparable<Vertex> {
 	public Vertex(int x, int y) {
 		xCord = x;
 		yCord = y;
-		vertW = 20;
-		vertH = 20;
+		vertW = 15;
+		vertH = 15;
 		distanceValue = 0;
 		numberOfVerticies++;
 		name = (char) ('a' + numberOfVerticies - 1);
@@ -435,7 +442,9 @@ class Vertex implements Comparable<Vertex> {
 		yCord = newY;
 	}
 	
-	public void toggleSelected() { isSelected = !isSelected; }
+	public void turnOn() { isSelected = true; }
+	
+	public void turnOff() { isSelected = false; }
 	
 	@Override
 	public String toString() { return xCord + ", " + yCord; }
@@ -445,9 +454,15 @@ class Vertex implements Comparable<Vertex> {
 		x = xCord - (vertW / 2);
 		y = yCord - (vertH / 2);
 		
+		
 		g.setColor(Color.RED);
 		g.fillOval(x, y, vertW, vertH);
-		g.setColor(Color.BLACK);
+		
+		if (isSelected)
+			g.setColor(Color.GREEN);
+		
+		else 
+			g.setColor(Color.BLACK);
 		g.drawOval(x, y, vertW, vertH);
 		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
 		g.drawString(Character.toString(name), x, y);
@@ -464,12 +479,14 @@ class Edge {
 	private int xCord, yCord, midpointX, midpointY, weight;
 	private Vertex[] endpoints; // Source is starting vertex, destination is ending vertex
 	private boolean isSelected;
+	Random rand;
 	
 	public Edge(Vertex s, Vertex d) {
 		endpoints = (Vertex[]) new Vertex[] {s, d};
 		midpointX = (endpoints[0].getX() + endpoints[1].getX() ) / 2;
 		midpointY = (endpoints[0].getY() + endpoints[1].getY() ) / 2;
-		weight = 0;
+		rand = new Random();
+		weight = rand.nextInt(20) + 1;;
 		isSelected = false;
 	}
 	
@@ -500,7 +517,36 @@ class Edge {
 	
 	public void toggleSelected() { isSelected = !isSelected; }
 	
+	public void turnOff() { isSelected = false; }
+	
 } // End Edge
+
+class AddAllEdgesAction implements ActionListener {
+	private GraphPanel g;
+	private ArrayList<Vertex> verticies;
+	private Vertex u;
+	
+	public AddAllEdgesAction(GraphPanel gp, ArrayList<Vertex> v) {
+		g = gp;
+		verticies = v;
+	}
+	
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		ArrayList<Vertex> known = new ArrayList<Vertex>();
+		HashMap<Vertex, Edge> forest = new HashMap<Vertex, Edge>();
+		
+		u = verticies.get(0);
+		
+		known.add(u);
+		for(Vertex v : verticies ) {
+			g.insertEdge(u, v);
+			g.repaint();
+		}
+		
+	}
+	
+}
 
 class RandomWeightAction implements ActionListener {
 	private GraphPanel graphPanel;
@@ -512,7 +558,7 @@ class RandomWeightAction implements ActionListener {
 	}
 	
 	@Override
-	public void actionPerformed(ActionEvent arg0) {
+	public void actionPerformed(ActionEvent e) {
 		for (int i = 0; i < graphPanel.getEdges().size(); i++) {
 			int n = rand.nextInt(20) + 1;
 			( (Edge) graphPanel.getEdges().get(i)).setWeight(n);
