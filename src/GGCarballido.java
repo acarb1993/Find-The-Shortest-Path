@@ -436,7 +436,7 @@ class Vertex {
 	
 	public int getDistanceValue() { return distanceValue; }
 	
-	public void setDistanceValue(int d) { d = distanceValue; }
+	public void setDistanceValue(int d) { distanceValue = d; }
 	
 	public char getName() { return name; }
 	
