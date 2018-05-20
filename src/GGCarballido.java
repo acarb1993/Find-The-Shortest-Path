@@ -125,11 +125,25 @@ class GraphPanel extends JPanel {
 				else if (buttonPanel.changeWeightToButtonIsOn()) {
 					if (findClosestVertex(e.getX(), e.getY() ) ) {	
 						if (u != null && v != null) {
-							turnOffVerticies();
-							String textField = buttonPanel.getChangeWeightTextPanel().getText(); 
-							int newWeight = Integer.parseInt(textField);
-							getEdge(u, v).setWeight(newWeight);
-							u = v = null;
+							if (hasEdge(u, v)) {
+								turnOffVerticies();
+								
+								if (buttonPanel.getChangeWeightTextPanel().getText().trim().isEmpty() ) {
+									turnOffVerticies();
+									u = v = null;
+								}
+					
+								else {
+									String textField = buttonPanel.getChangeWeightTextPanel().getText(); 
+									int newWeight = Integer.parseInt(textField);
+									getEdge(u, v).setWeight(newWeight);
+									u = v = null;
+									}
+							}
+							else {
+								turnOffVerticies();
+								u = v = null;
+							}
 						}
 					}
 				}
@@ -186,7 +200,10 @@ class GraphPanel extends JPanel {
 		}
 	}
 	
-	
+	public boolean hasEdge(Vertex u, Vertex v) {
+		Vertex origin = u;
+		return origin.getAdjacencyMap().get(v) != null;
+	}
 	
 	// Returns the edge from u to v, or null if they are not adjacent;
 	public Edge getEdge(Vertex u, Vertex v) {
