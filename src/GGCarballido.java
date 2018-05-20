@@ -3,13 +3,10 @@ import javax.swing.*;
 import java.awt.event.*;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.PriorityQueue;
 import java.util.Random;
-import java.util.Set;
+
 
 /* Adam Carballido
  *  A Java program that will make simple graphs and calculate shortest paths between verticies.
@@ -52,28 +49,30 @@ class MainFrame extends JFrame {
 } // End MainFrame Class
 
 class GraphPanel extends JPanel {
-	private int width, height, vertX, vertY, vStoreCap;
+	private int width, height;
 	
 	private ButtonPanel buttonPanel;
 	
+	Vertex u, v; // Storing the verticies clicked by user
+	
 	private ArrayList<Vertex> verticies; // Positional verticie list
 	private ArrayList<Edge> edges; // Positional edge list
-	private ArrayList<Vertex> vStore;
-	private HashMap<Vertex, Edge> adjacencyMap;
-	private HashMap<Vertex, Integer> distances;
-	private HashMap<Vertex, Vertex> predecessors;
+	private HashMap<Position, Vertex> vMap; // Stores the locations of Verticies and their positions
+	private HashMap<Vertex, Edge> adjacencyMap; 
+	private HashMap<Vertex, Integer> distances; // Map of the distances between all verticies in shortest path
+	private HashMap<Vertex, Vertex> predecessors; // Map of verticies that are adjacent to each other
 	private PriorityQueue<Vertex> pq;
 	
 	public GraphPanel(int width, int height) {
-		width = height = vertX = vertY = 0;
+		width = height = 0;
 		
 		verticies = new ArrayList<Vertex>();
 		edges = new ArrayList<Edge>();
-		vStore = new ArrayList<Vertex>(2); // Stores the two verticies seleceted to make an edge
-		vStoreCap = 2;
+	
 		adjacencyMap = new HashMap<Vertex, Edge>(); 
 		distances = new HashMap<Vertex, Integer>();
 		predecessors = new HashMap<Vertex, Vertex>();
+		vMap = new HashMap<Position, Vertex>();
 		
 		setBorder(BorderFactory.createTitledBorder("Graph") );		
 		setPreferredSize(new Dimension(width, height) );
@@ -82,65 +81,65 @@ class GraphPanel extends JPanel {
 		addMouseListener(new MouseAdapter() {
 			public void mousePressed(MouseEvent e) {
 				if (buttonPanel.vertexButtonIsOn() ) {
-					drawVertex(e.getX(), e.getY());
-					verticies.add(new Vertex(e.getX(), e.getY()));
+					insertVertex(new Position(e.getX(), e.getY() ) );
 				}
 				
-				else if (buttonPanel.edgeButtonIsOn() ) {	
-					for (int i = 0; i < verticies.size(); i++) {
-						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
-							vStore.add(verticies.get(i) );
-							verticies.get(i).turnOn();
-							repaint();
-							if (vStore.size() == vStoreCap) {
-								if (vStore.get(0) == vStore.get(1) )  
-									vStore.remove(1); 
-										
-								else { 
-								    edges.add(insertEdge(vStore.get(0), vStore.get(1) ) );
-								    adjacencyMap.put(vStore.get(0), getLastEdgeAdded() );
-								    adjacencyMap.put(vStore.get(1), getLastEdgeAdded() );
-								    vStore.clear();
-								}
-							}
+				else if (buttonPanel.edgeButtonIsOn() ) {
+					if (findClosestVertex(e.getX(), e.getY() ) ) {	
+						if (u != null && v != null) {
+							turnOffVerticies();
+							edges.add(insertEdge(u, v));
+							adjacencyMap.put(u, getLastEdgeAdded() );
+							adjacencyMap.put(v, getLastEdgeAdded() );
+							u = v = null;
 						}
 					}
-				} // end else if
+				}
 				
 				else if (buttonPanel.moveVertexButtonIsOn() ) {
-					for (int i = 0; i < verticies.size(); i++) {
-						if (findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
-							vStore.add(verticies.get(i) );
-						}
+					if (u == null) {
+						findClosestVertex(e.getX(), e.getY() );
 					}
-					vStore.clear();
+					
+					else {
+						u.moveVertex(e.getX(), e.getY());
+						u.turnOff();
+						repaint();
+						u = v = null;
+					}
 				}
 				
 				else if (buttonPanel.shortestPathButtonIsOn() ) {
-					for (int i = 0; i < verticies.size(); i++) {
-						if(findClosestVertex(e.getX(), e.getY(), verticies.get(i) ) ) {
-							vStore.add(verticies.get(i) );
-							if(vStore.size() == vStoreCap) {
-								if(vStore.get(0) == vStore.get(1) )
-									vStore.remove(1);
-								
-								else { // Dijkstra's Algorithm
-									shortestPath(vStore.get(0));
-									ArrayList<Vertex> twoPointsPath = shortestPath(vStore.get(0), vStore.get(1));
-									for (i = 0; i < twoPointsPath.size(); i++) {
-										System.out.println(twoPointsPath.get(i).getName() );
-									}
-									distances.clear();
-									predecessors.clear();
-									vStore.clear();
-								}
+						if (findClosestVertex(e.getX(), e.getY() )) {
+							if (u != null && v != null) {
+								turnOffVerticies();
+								shortestPath(u);
+								shortestPath(u, v);
+								distances.clear();
+								predecessors.clear();
+								u = v = null;
 							}
 						}
 					}
-				} // end else if
-			} // end mouse pressed
-		});
+				
+				else if (buttonPanel.changeWeightToButtonIsOn()) {
+					if (findClosestVertex(e.getX(), e.getY() ) ) {	
+						if (u != null && v != null) {
+							turnOffVerticies();
+							String textField = buttonPanel.getChangeWeightTextPanel().getText(); 
+							int newWeight = Integer.parseInt(textField);
+							getEdge(u, v).setWeight(newWeight);
+							u = v = null;
+						}
+					}
+				}
+			} // End mousePressed
+		}); // End Mouse Adapter
 	} // End constructor
+	
+	public Vertex getU() { return u; }
+	
+	public Vertex getV() { return v; }
 	
 	// Finds the shortest path between two verticies
 	public ArrayList<Vertex> shortestPath(Vertex source, Vertex target) {
@@ -185,10 +184,9 @@ class GraphPanel extends JPanel {
 				}
 			}
 		}
-		
-		System.out.println(distances.toString() );
-		System.out.println(predecessors.toString() );
 	}
+	
+	
 	
 	// Returns the edge from u to v, or null if they are not adjacent;
 	public Edge getEdge(Vertex u, Vertex v) {
@@ -198,7 +196,6 @@ class GraphPanel extends JPanel {
 	
 	// Returns the verticies of edge e as an array of length two
 	public Vertex[] endVerticies(Edge e){
-		Edge edge = e;
 		return e.getEndPoints();
 	}
 	
@@ -211,9 +208,16 @@ class GraphPanel extends JPanel {
 		else if (endpoints[1] == v)
 			return endpoints[0];
 		else {
-			vStore.clear();
 			throw new IllegalArgumentException("v is not incident to this edge");
 		}
+	}
+	
+	public Vertex insertVertex(Position p) {
+		drawVertex();
+		Vertex vert = new Vertex(p);
+		verticies.add(vert);
+		vMap.put(p, vert);
+		return vert;
 	}
 	
 	public Edge insertEdge(Vertex u, Vertex v) throws IllegalArgumentException {
@@ -224,11 +228,13 @@ class GraphPanel extends JPanel {
 			Vertex destination = v;
 			origin.getAdjacencyMap().put(v, e);
 			destination.getAdjacencyMap().put(u, e);
+			edges.add(e);
 			return e;
 		}
 		else {
-			vStore.clear();
+			u = v = null;
 			throw new IllegalArgumentException("Edge from u to v exists");
+			
 		}
 	}
 	
@@ -249,21 +255,35 @@ class GraphPanel extends JPanel {
 	public ArrayList<Edge> getEdges() { return edges; }
 	
 	// Will find the the closest Vertex where the user clicked depending on the offset.
-	private boolean findClosestVertex(int x, int y, Vertex v) {
+	private boolean findClosestVertex(int x, int y) {
 		int offset = 10;
-		if ( ( (x - v.getX() >= 0) && (x - v.getX() <= offset)  ||
-			(v.getX() - x <= offset) && (v.getX() - x >= 0)  ) &&
-			( (y - v.getY() >= 0) && (y - v.getY() <= offset) ||
-			(v.getY() - y <= offset) && (v.getY() - y >= 0) ) ||
-			 (x == v.getX() ) && (y == v.getY() ) ) 
-			return true;
 		
-		else return false;
+		for (int i = 0; i < verticies.size(); i++) {
+			if ( ( (x - verticies.get(i).getX() >= 0) && (x - verticies.get(i).getX() <= offset)  ||
+					(verticies.get(i).getX() - x <= offset) && (verticies.get(i).getX() - x >= 0)  ) &&
+					( (y - verticies.get(i).getY() >= 0) && (y - verticies.get(i).getY() <= offset) ||
+							(verticies.get(i).getY() - y <= offset) && (verticies.get(i).getY() - y >= 0) ) ||
+					(x == verticies.get(i).getX() ) && (y == verticies.get(i).getY() ) ) {
+				if (u == null) {
+					u = verticies.get(i);
+					u.turnOn();
+					repaint();
+					return true;
+				}
+				
+				else if (u != null) {
+					v = verticies.get(i);
+					v.turnOn();
+					repaint();
+					return true;
+				}
+			}
+		
+		}
+		return false;
 	}
 	
-	private void drawVertex(int x, int y) {
-			vertX = x;
-			vertY = y;
+	private void drawVertex() {
 			repaint();
 	}
 	
@@ -314,6 +334,8 @@ class ButtonPanel extends JPanel {
 	JButton help;
 	
 	ButtonGroup group;
+	
+	JTextPane textPane;
 
 	public ButtonPanel(int width, int height, GraphPanel gp) {
 		setBorder(BorderFactory.createTitledBorder("Options") );
@@ -353,8 +375,7 @@ class ButtonPanel extends JPanel {
 			group.add(radioButtons.get(i));
 		}
 				
-		// TODO will let the user change the weight of a given verticie
-		JTextPane textPane = new JTextPane();
+		textPane = new JTextPane();
 		textPane.setPreferredSize(new Dimension(200, 50));
 		textPane.setFont(textPane.getFont().deriveFont(30.0f));
 
@@ -398,20 +419,23 @@ class ButtonPanel extends JPanel {
 	
 	public boolean shortestPathButtonIsOn() { return shortestPath.isSelected(); }
 	
+	// TODO add change weight action
 	public boolean changeWeightToButtonIsOn() { return changeWeightTo.isSelected(); }
+	
+	public JTextPane getChangeWeightTextPanel() { return textPane; }
 	
 } // End ButtonPanel Class
 
 class Vertex implements Comparable<Vertex> {
-	private int xCord, yCord, vertW, vertH, distanceValue;
+	private int vertW, vertH, distanceValue;
+	private Position p;
 	private char name; // The letter name starting with 'a' of the vertex
 	private static int numberOfVerticies = 0;
 	private HashMap<Vertex, Edge> adjacencyMap;
 	private boolean isSelected;
 	
-	public Vertex(int x, int y) {
-		xCord = x;
-		yCord = y;
+	public Vertex(Position pos) {
+		p = pos;
 		vertW = 15;
 		vertH = 15;
 		distanceValue = 0;
@@ -422,10 +446,12 @@ class Vertex implements Comparable<Vertex> {
 	}
 	
 	// Returns the value of the x Coordinate
-	public int getX() { return xCord; }
+	public int getX() { return p.getXCord(); }
 	
 	// Returns the value of the y Coordinate
-	public int getY() { return yCord; }
+	public int getY() { return p.getYCord(); }
+	
+	public Position getPosition() { return p; }
 	
 	public int getDistanceValue() { return distanceValue; }
 	
@@ -437,22 +463,19 @@ class Vertex implements Comparable<Vertex> {
 	
 	public void addToAdjacencyMap(Vertex v, Edge e) { adjacencyMap.put(v, e); }
 	
-	public void moveVertex(int newX, int newY) {
-		xCord = newX;
-		yCord = newY;
+	public void moveVertex(int x, int y) {
+		p.setXCord(x);
+		p.setYCord(y);
 	}
 	
 	public void turnOn() { isSelected = true; }
 	
 	public void turnOff() { isSelected = false; }
 	
-	@Override
-	public String toString() { return xCord + ", " + yCord; }
-	
 	public void paintVertex(Graphics g) {
 		int x, y;
-		x = xCord - (vertW / 2);
-		y = yCord - (vertH / 2);
+		x = p.getXCord() - (vertW / 2);
+		y = p.getYCord() - (vertH / 2);
 		
 		
 		g.setColor(Color.RED);
@@ -506,8 +529,13 @@ class Edge {
 		
 		else 
 			g.setColor(Color.BLUE);
+		
 		g.drawLine(endpoints[0].getX(), endpoints[0].getY(), endpoints[1].getX(), endpoints[1].getY());
 		g.setFont(new Font("Sans Serif", Font.PLAIN, 20) );
+		
+		midpointX = (endpoints[0].getX() + endpoints[1].getX() ) / 2;
+		midpointY = (endpoints[0].getY() + endpoints[1].getY() ) / 2;
+		
 		g.drawString(Integer.toString(weight), midpointX, midpointY);
 	}
 	
@@ -521,6 +549,23 @@ class Edge {
 	
 } // End Edge
 
+class Position {
+	int xCord, yCord;
+	
+	public Position(int x, int y) {
+		xCord = x;
+		yCord = y;
+	}
+	
+	public int getXCord() { return xCord; }
+	
+	public int getYCord() { return yCord; }
+	
+	public void setXCord(int x) { xCord = x; }
+	
+	public void setYCord(int y) { yCord = y; }
+}
+
 class AddAllEdgesAction implements ActionListener {
 	private GraphPanel g;
 	private ArrayList<Vertex> verticies;
@@ -533,20 +578,23 @@ class AddAllEdgesAction implements ActionListener {
 	
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		ArrayList<Vertex> known = new ArrayList<Vertex>();
-		HashMap<Vertex, Edge> forest = new HashMap<Vertex, Edge>();
+		ArrayList<Vertex> unvisited = new ArrayList<Vertex>();
 		
-		u = verticies.get(0);
+		for (Vertex v : verticies)
+			unvisited.add(v);
 		
-		known.add(u);
-		for(Vertex v : verticies ) {
-			g.insertEdge(u, v);
-			g.repaint();
+		while(unvisited.size() != 0) {
+			u = unvisited.get(0);
+			
+			for (int i = 0; i < verticies.size(); i++)
+				if (u != verticies.get(i) && g.getEdge(u, verticies.get(i) ) == null)
+					g.insertEdge(u, verticies.get(i));
+			
+			unvisited.remove(u);
 		}
-		
+		g.repaint();
 	}
-	
-}
+} // end AddAllEdges
 
 class RandomWeightAction implements ActionListener {
 	private GraphPanel graphPanel;
@@ -573,39 +621,30 @@ class HelpAction implements ActionListener {
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		JFrame frame = new JFrame("Help Window");
-		frame.setSize(new Dimension(1200, 800));
-		frame.setLocationRelativeTo(null);
 		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 		frame.setResizable(false);
+		frame.setLayout(new BorderLayout() );
 
 		JPanel panel = new JPanel();
-		panel.setLayout(new GridBagLayout() );
-		GridBagConstraints gbc = new GridBagConstraints(); 
-		gbc.insets = new Insets(15, 10, 15, 0); // Space between containers: top, left, bottom, right
 
-		// Creates the labels and sets their constraints of the grid bag layout
-		JLabel[] labels = new JLabel[9];
-		for (int i = 0; i < labels.length; i++) {
-			labels[i] = new JLabel("", SwingConstants.LEFT);
-			labels[i].setFont(new Font("Century", Font.PLAIN, 30) );
-			gbc.gridx = 0;
-			gbc.gridy = i;
-			panel.add(labels[i], gbc);
-		}
-
-		labels[0].setText("How to Use: ");
-		labels[0].setFont(new Font("Century", Font.PLAIN, 50) );
-		labels[1].setText("Add Vertex: Click on an area on the graph panel to place a vertex. ");
-		labels[2].setText("Add Edge: Click on two verticies to connect them with an edge.");
-		labels[3].setText("Move Vertex: Moves a vertex to another area on the graph panel.");
-		labels[4].setText("Shortest Path: Will calculate the shortest path from one vertice to the other.");
-		labels[5].setText("Change Weight To: Click on an edge and enter the weight to be changed in the text field.");
-		labels[6].setText("Add All Edges: Adds all possible edges between two verticies. ");
-		labels[7].setText("Random Weights: Gives each edge a random weight.");
-		labels[8].setText("Minimal Spanning Tree: Finds a path between all verticies with the lowest cost.");
-
+		StringBuilder sb = new StringBuilder(64);
+		
+		sb.append("<html> <br>Add Vertex: Click anywhere on the Graph Panel to add a vertex <br>")
+		.append("<br>Add Edge: Click on two verticies to add an edge. Will thorw an exception if two vertices already share an edge <br>")
+		.append("<br>Move Vertex: Click on a vertex to move it to a different location of the graph panel <br>")
+		.append("<br>Shortest Path: Click on two verticies to get the shortest distance from the first selected to the second. <br>")
+		.append("<br>Change Weight To: Click on two verticies with a shared edge and type an integer into the field to change the weight.<br>")
+		.append("<br>Add All Edges: Adds all edges to un-incidented verticies <br>")
+		.append("<br>Gives all edges random weights from 1 to 20 <br>")
+		.append("<br>Minimal Spanning Tree: TODO (Maybe?) <br>")
+		.append("<br>Help: Displays the help button (Which is why you're here right?)</html>");
+		
+		JLabel helpText = new JLabel(sb.toString());
+		helpText.setFont(new Font("Sans Serif", Font.PLAIN, 13) );
+		panel.add(helpText);
 		frame.add(panel);
-
+		frame.pack();
+		frame.setLocationRelativeTo(null);
 		frame.setVisible(true);
 	}
-} // End HelpAction Class
+} // End HelpAction 
